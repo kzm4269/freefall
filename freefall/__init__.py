@@ -4,6 +4,12 @@ import os
 from pathlib import Path
 
 
+__all__ = [
+    'Downloading', 'Completed', 'RetryableError', 'NonRetryableError', 
+    'BaseDownloader',
+]
+
+
 class Downloading(Exception):
     pass
 
