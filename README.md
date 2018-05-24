@@ -1,4 +1,4 @@
-# simple-downloader
+# Freefall
 Directory based simple downloader
 
 ## Install
