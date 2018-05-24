@@ -69,6 +69,11 @@ class BaseDownloader:
         except FileExistsError:
             raise Downloading(resource_id)
 
+        try:
+            os.remove(str(error_marker))
+        except FileNotFoundError:
+            pass
+        
         file_handler = logging.FileHandler(
             str(prefix / 'log.txt'), 'w', encoding='utf-8')
         file_handler.setFormatter(self._log_formatter)
