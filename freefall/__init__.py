@@ -29,7 +29,7 @@ class NonRetryableError(Exception):
 class BaseDownloader:
     def __init__(self, *, archive=None, log_formatter=None):
         if archive is None:
-            self._archive = 'archive'
+            self._archive = Path('archive')
         else:
             self._archive = Path(archive)
 
