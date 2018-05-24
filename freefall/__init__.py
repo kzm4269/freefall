@@ -63,14 +63,14 @@ class BaseDownloader:
         if completed_marker.exists() and not force:
             raise Completed(resource_id)
 
-        os.makedirs(prefix, exist_ok=True)
+        os.makedirs(str(prefix), exist_ok=True)
         try:
             downloading_marker.touch(exist_ok=False)
         except FileExistsError:
             raise Downloading(resource_id)
 
         file_handler = logging.FileHandler(
-            prefix / 'log.txt', 'w', encoding='utf-8')
+            str(prefix / 'log.txt'), 'w', encoding='utf-8')
         file_handler.setFormatter(self._log_formatter)
         file_handler.setLevel('DEBUG')
         logger.addHandler(file_handler)
