@@ -93,7 +93,7 @@ class BaseDownloader:
             completed_marker.touch()
         finally:
             file_handler.close()
-            os.remove(downloading_marker)
+            os.remove(str(downloading_marker))
 
     def download(self, urls, force=False):
         if isinstance(urls, str):
