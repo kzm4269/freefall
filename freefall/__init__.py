@@ -3,9 +3,8 @@ import logging
 import os
 from pathlib import Path
 
-
 __all__ = [
-    'Downloading', 'Completed', 'RetryableError', 'NonRetryableError', 
+    'Downloading', 'Completed', 'RetryableError', 'NonRetryableError',
     'BaseDownloader',
 ]
 
@@ -26,12 +25,12 @@ class NonRetryableError(Exception):
     pass
 
 
-class BaseDownloader:
-    def __init__(self, *, archive=None, log_formatter=None):
-        if archive is None:
+class BaseDownloader(metaclass=abc.ABCMeta):
+    def __init__(self, *, prefix=None, log_formatter=None):
+        if prefix is None:
             self._archive = Path('archive')
         else:
-            self._archive = Path(archive)
+            self._archive = Path(prefix)
 
         self._logger = logging.getLogger(type(self).__name__)
 
@@ -40,22 +39,25 @@ class BaseDownloader:
         else:
             self._log_formatter = log_formatter
 
-    @abc.abstractmethod
-    def _resource_ids(self, urls):
-        pass
+    def _resource_ids(self, args):
+        return args
+
+    def _save_prefix(self, resource_id):
+        return os.path.basename(resource_id)
 
     @abc.abstractmethod
     def _download_resource(self, resource_id, prefix, logger):
-        pass
+        raise NotImplementedError()
 
-    @property
-    def logger(self):
+    def logger(self, resource_id=None):
+        if resource_id is not None:
+            return self._logger.getChild(self._save_prefix(resource_id))
         return self._logger
 
     def _download(self, resource_id, force):
-        logger = self._logger.getChild(resource_id)
+        logger = self.logger(resource_id)
 
-        prefix = self._archive / resource_id
+        prefix = self._archive / self._save_prefix(resource_id)
         completed_marker = prefix / '.completed'
         error_marker = prefix / '.error'
         downloading_marker = prefix / '.downloading'
@@ -73,7 +75,7 @@ class BaseDownloader:
             os.remove(str(error_marker))
         except FileNotFoundError:
             pass
-        
+
         file_handler = logging.FileHandler(
             str(prefix / 'log.txt'), 'w', encoding='utf-8')
         file_handler.setFormatter(self._log_formatter)
@@ -100,12 +102,9 @@ class BaseDownloader:
             file_handler.close()
             os.remove(str(downloading_marker))
 
-    def download(self, urls, force=False):
-        if isinstance(urls, str):
-            urls = [urls]
-
-        for resource_id in self._resource_ids(urls):
-            logger = self._logger.getChild(resource_id)
+    def download(self, args, force=False):
+        for resource_id in self._resource_ids(args):
+            logger = self.logger(resource_id)
             try:
                 self._download(resource_id, force=force)
             except Completed:
