@@ -14,7 +14,7 @@ with open('LICENSE') as f:
 
 setup(
     name='freefall',
-    version='2.0',
+    version='2.0.1',
     description='Directory based simple downloader',
     long_description=README,
     author='kzm4269',
@@ -23,4 +23,9 @@ setup(
     license=LICENSE,
     packages=find_packages(exclude=['tests']),
     test_suite='tests',
+    install_requires=[
+    ],
+    extras_require={
+        'test': ['psutil'],
+    },
 )
