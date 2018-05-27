@@ -1,12 +1,19 @@
 import tempfile
 import unittest
 
+import multiprocessing as mp
+import psutil
+
 from freefall import BaseDownloader
+
+
+def _open_files():
+    return psutil.Process(mp.current_process().pid).open_files()
 
 
 class TestBaseDownloader(unittest.TestCase):
     def setUp(self):
-        pass
+        self._open_files = _open_files()
 
     def test_init(self):
         with tempfile.TemporaryDirectory() as tempd:
@@ -24,3 +31,5 @@ class TestBaseDownloader(unittest.TestCase):
 
             d = Downloader(prefix=tempd)
             d.download(['http://example.com'])
+
+            assert self._open_files == _open_files()
