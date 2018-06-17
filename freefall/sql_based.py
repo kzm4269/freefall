@@ -22,7 +22,6 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
                 r"""
                 CREATE TABLE IF NOT EXISTS resources (
                     id TEXT PRIMARY KEY,
-                    archive_prefix TEXT,
                     downloading BOOLEAN NOT NULL DEFAULT 0,
                     completed BOOLEAN NOT NULL DEFAULT 0,
                     failed BOOLEAN NOT NULL DEFAULT 0)
