@@ -93,10 +93,8 @@ class BaseDownloader(metaclass=ABCMeta):
     def _save_status(self, resource, status):
         pass
 
-    @staticmethod
-    def _resource_id(resource):
+    def _resource_id(self, resource):
         return resource.id
 
-    @staticmethod
-    def _archive_prefix(resource):
+    def _archive_prefix(self, resource):
         return resource.archive_prefix

@@ -45,7 +45,6 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             else:
                 return {
                     'id': self._resource_id(resource),
-                    'archive_prefix': self._archive_prefix(resource),
                 }
 
     def _save_status(self, resource, status):
