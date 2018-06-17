@@ -23,7 +23,7 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             with open(str(self._status_path(resource))) as fp:
                 return json.load(fp)
         except FileNotFoundError:
-            return {}
+            return {'id': self._resource_id(resource)}
 
     def _save_status(self, resource, status):
         with open(str(self._status_path(resource)), 'w') as fp:
