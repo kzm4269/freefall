@@ -1,5 +1,6 @@
 import logging
 from abc import ABCMeta, abstractmethod
+from pathlib import Path
 
 
 class Downloading(Exception):
@@ -19,12 +20,19 @@ class NonRetryableError(Exception):
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def download(self, args):
-        for resource in self.as_resources(args):
+    def download(self, args, exit_if_failed=False):
+        for resource in self._as_resources(args):
             logger = self.logger(resource)
 
+            prefix = Path(self._archive_prefix(resource))
+            prefix.mkdir(exist_ok=True, parents=True)
+            file_handler = logging.FileHandler(
+                str(prefix / 'log.txt'), 'a', encoding='utf-8')
+            file_handler.setLevel('DEBUG')
+            logger.addHandler(file_handler)
+
             try:
-                self.download_resource(resource)
+                self._download(resource)
             except Completed:
                 logger.warning('Already completed')
             except Downloading:
@@ -32,11 +40,17 @@ class BaseDownloader(metaclass=ABCMeta):
             except (RetryableError, NonRetryableError) as e:
                 logger.warning('%s: %s', type(e).__name__, str(e))
                 logger.debug('Detail', exc_info=True)
+                if exit_if_failed:
+                    raise
             except Exception as e:
                 logger.exception(str(e))
                 raise
+            else:
+                logger.info('Completed')
+            finally:
+                file_handler.close()
 
-    def download_resource(self, resource):
+    def _download(self, resource):
         with self._lock_status(resource):
             status = self._load_status(resource)
 
@@ -74,7 +88,7 @@ class BaseDownloader(metaclass=ABCMeta):
         return logger
 
     @abstractmethod
-    def as_resources(self, args):
+    def _as_resources(self, args):
         pass
 
     @abstractmethod
