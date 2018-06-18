@@ -23,13 +23,8 @@ class BaseDownloader(metaclass=ABCMeta):
     def download(self, args, exit_if_failed=False):
         for resource in self._as_resources(args):
             logger = self.logger(resource)
-
-            prefix = Path(self._archive_prefix(resource))
-            prefix.mkdir(exist_ok=True, parents=True)
-            file_handler = logging.FileHandler(
-                str(prefix / 'log.txt'), 'a', encoding='utf-8')
-            file_handler.setLevel('DEBUG')
-            logger.addHandler(file_handler)
+            log_handler = self._log_handler(resource)
+            logger.addHandler(log_handler)
 
             try:
                 self._download(resource)
@@ -48,7 +43,8 @@ class BaseDownloader(metaclass=ABCMeta):
             else:
                 logger.info('Completed')
             finally:
-                file_handler.close()
+                log_handler.close()
+                logger.removeHandler(log_handler)
 
     def _download(self, resource):
         with self._lock_status(resource):
@@ -86,6 +82,16 @@ class BaseDownloader(metaclass=ABCMeta):
         if resource is not None:
             return logger.getChild(str(self._resource_id(resource)))
         return logger
+
+    def _log_handler(self, resource):
+        log_prefix = Path(self._archive_prefix(resource))
+        log_prefix.mkdir(exist_ok=True, parents=True)
+        file_handler = logging.FileHandler(
+            str(log_prefix / 'log.txt'), 'a', encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter(
+            '[%(asctime)s] %(name)s: %(levelname)s: %(message)s'))
+        file_handler.setLevel('DEBUG')
+        return file_handler
 
     @abstractmethod
     def _as_resources(self, args):
