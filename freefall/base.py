@@ -60,12 +60,13 @@ class BaseDownloader(metaclass=ABCMeta):
                 raise Completed()
 
             status['downloading'] = True
+            status['completed'] = False
+            status['failed'] = False
             self._save_status(session, resource, status)
 
         try:
             self._force_download(resource)
         except RetryableError:
-            status['completed'] = False
             status['failed'] = True
             raise
         except NonRetryableError:
@@ -74,7 +75,6 @@ class BaseDownloader(metaclass=ABCMeta):
             raise
         else:
             status['completed'] = True
-            status['failed'] = False
         finally:
             status['downloading'] = False
 
