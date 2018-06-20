@@ -1,58 +1,67 @@
-import sqlite3
 from abc import ABCMeta
 from contextlib import contextmanager
 
+import sqlalchemy as sql
+import sqlalchemy.ext.declarative
+
 from .base import BaseDownloader
 
+_Base = sql.ext.declarative.declarative_base()
 
-def _escape(text, quote='"'):
-    return quote + text.replace(quote, quote * 2) + quote
+
+def _repr_record(record):
+    if not isinstance(record, _Base):
+        raise TypeError(record)
+
+    columns = ', '.join(
+        '{}={!r}'.format(key, getattr(record, key))
+        for key in record.__table__.columns.keys())
+    return '{}({})'.format(type(record).__name__, columns)
+
+
+_Base.__repr__ = _repr_record
+
+
+class BaseSqlResource(_Base):
+    __abstract__ = True
+
+    id = sql.Column(sql.String, primary_key=True)
+    downloading = sql.Column(sql.Boolean, nullable=False, default=False)
+    completed = sql.Column(sql.Boolean, nullable=False, default=False)
+    failed = sql.Column(sql.Boolean, nullable=False, default=False)
 
 
 class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
-    def __init__(self, database):
-        self._connection = sqlite3.connect(database)
-        self._connection.row_factory = sqlite3.Row
-
-        self._init_database()
-
-    def _init_database(self):
-        with self._connection:
-            self._connection.execute(
-                r"""
-                CREATE TABLE IF NOT EXISTS resources (
-                    id TEXT PRIMARY KEY,
-                    downloading BOOLEAN NOT NULL DEFAULT 0,
-                    completed BOOLEAN NOT NULL DEFAULT 0,
-                    failed BOOLEAN NOT NULL DEFAULT 0)
-                """)
+    def __init__(self, sessionmaker):
+        self._sessionmaker = sessionmaker
 
     @contextmanager
-    def _lock_status(self, resource):
-        with self._connection:
-            self._connection.execute(r"""BEGIN EXCLUSIVE""")
-            yield
+    def _exclusive_session(self, resource):
+        session = self._sessionmaker(autocommit=True)
+        with session.begin():
+            session.execute('BEGIN EXCLUSIVE')
+            yield session
 
-    def _load_status(self, resource):
-        with self._connection:
-            statuses = self._connection.execute(
-                r"""SELECT * FROM resources WHERE id = :id""",
-                {'id': self._resource_id(resource)})
+    def _load_status(self, session, resource):
+        resource_ = session.query(type(resource)).get(resource.id)
 
-            for status in statuses:
-                return dict(status)
-            else:
-                return {
-                    'id': self._resource_id(resource),
-                }
+        if resource_ is None:
+            session.add(resource)
+            resource_ = resource
 
-    def _save_status(self, resource, status):
-        with self._connection:
-            self._connection.execute(
-                r"""
-                INSERT OR REPLACE 
-                INTO resources ({columns}) VALUES ({placeholders})
-                """.format(
-                    columns=','.join(map(_escape, status.keys())),
-                    placeholders=','.join('?' * len(status))),
-                list(status.values()))
+        return {
+            key: getattr(resource_, key)
+            for key in resource_.__table__.columns.keys()}
+
+    def _save_status(self, session, resource, status):
+        session.merge(type(resource)(**{
+            c.name: status.get(c.name)
+            for c in resource.__table__.columns
+            if status.get(c.name) is not None or c.nullable}))
+
+    def logger(self, resource=None):
+        logger = super().logger(resource)
+        if resource is not None:
+            name = resource.__table__.name + '/' + resource.id
+            logger = logger.getChild(name)
+        return logger

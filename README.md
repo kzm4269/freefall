@@ -1,5 +1,5 @@
 # Freefall
-Directory based simple downloader
+Simple Archiver
 
 ## Install
 

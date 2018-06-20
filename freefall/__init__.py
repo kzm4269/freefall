@@ -3,4 +3,4 @@ from .base import (
     RetryableError, NonRetryableError,
 )
 from .file_based import FileBasedDownloader
-from .sql_based import SqlBasedDownloader
+from .sql_based import SqlBasedDownloader, BaseSqlResource
