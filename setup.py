@@ -14,7 +14,7 @@ with open('LICENSE') as f:
 
 setup(
     name='freefall',
-    version='3.0.3',
+    version='4.0.0',
     description='Directory based simple downloader',
     long_description=README,
     author='kzm4269',
@@ -24,7 +24,7 @@ setup(
     packages=find_packages(exclude=['tests']),
     test_suite='tests',
     install_requires=[
-        'filelock',
+        'filelock', 'sqlalchemy'
     ],
     extras_require={
         'test': [
