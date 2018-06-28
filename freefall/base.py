@@ -21,7 +21,7 @@ class NonRetryableError(Exception):
 
 class BaseDownloader(metaclass=ABCMeta):
     def download(self, args, ignore=(RetryableError, NonRetryableError)):
-        for resource in self._as_resources(args):
+        for resource in self.as_resources(args):
             logger = self.logger(resource)
             log_handler = self._log_handler(resource)
             logger.addHandler(log_handler)
@@ -47,7 +47,7 @@ class BaseDownloader(metaclass=ABCMeta):
                 logger.info('Already completed')
             except Downloading:
                 logger.info('Already downloading')
-            except ignore:
+            except ignore or ():
                 pass
 
     def _download(self, resource):
@@ -86,7 +86,7 @@ class BaseDownloader(metaclass=ABCMeta):
         return logging.getLogger(name)
 
     def _log_handler(self, resource):
-        log_prefix = Path(self._archive_prefix(resource))
+        log_prefix = Path(self.archive_prefix(resource))
         log_prefix.mkdir(exist_ok=True, parents=True)
         file_handler = logging.FileHandler(
             str(log_prefix / 'log.txt'), 'a', encoding='utf-8')
@@ -96,15 +96,15 @@ class BaseDownloader(metaclass=ABCMeta):
         return file_handler
 
     @abstractmethod
-    def _as_resources(self, args):
+    def as_resources(self, args):
+        pass
+
+    @abstractmethod
+    def archive_prefix(self, resource):
         pass
 
     @abstractmethod
     def _force_download(self, resource):
-        pass
-
-    @abstractmethod
-    def _archive_prefix(self, resource):
         pass
 
     @abstractmethod
