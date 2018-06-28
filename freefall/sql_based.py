@@ -1,12 +1,12 @@
 from abc import ABCMeta
 from contextlib import contextmanager
 
-import sqlalchemy as sql
+import sqlalchemy as sa
 import sqlalchemy.ext.declarative
 
 from .base import BaseDownloader
 
-_Base = sql.ext.declarative.declarative_base()
+_Base = sa.ext.declarative.declarative_base()
 
 
 def _repr_record(record):
@@ -25,10 +25,10 @@ _Base.__repr__ = _repr_record
 class BaseSqlResource(_Base):
     __abstract__ = True
 
-    id = sql.Column(sql.String, primary_key=True)
-    downloading = sql.Column(sql.Boolean, nullable=False, default=False)
-    completed = sql.Column(sql.Boolean, nullable=False, default=False)
-    failed = sql.Column(sql.Boolean, nullable=False, default=False)
+    id = sa.Column(sa.Integer, primary_key=True)
+    downloading = sa.Column(sa.Boolean, nullable=False, default=False)
+    completed = sa.Column(sa.Boolean, nullable=False, default=False)
+    failed = sa.Column(sa.Boolean, nullable=False, default=False)
 
 
 class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
@@ -38,22 +38,29 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
     @contextmanager
     def _exclusive_session(self, resource):
         session = self._sessionmaker(autocommit=True)
+
         with session.begin():
-            session.execute('BEGIN EXCLUSIVE')
-            yield session
+            if session.bind.name == 'sqlite':
+                session.execute('BEGIN EXCLUSIVE')
+
+            query = session.query(type(resource)).with_for_update()
+            resource_ = query.get(resource.id)
+
+            if resource_ is None:
+                session.add(resource)
+                resource_ = query.get(resource.id)
+                assert resource_ is not None
+
+            yield session, resource_
 
     def _load_status(self, session, resource):
-        resource_ = session.query(type(resource)).get(resource.id)
-
-        if resource_ is None:
-            session.add(resource)
-            resource_ = resource
-
+        session, resource = session
         return {
-            key: getattr(resource_, key)
-            for key in resource_.__table__.columns.keys()}
+            key: getattr(resource, key)
+            for key in resource.__table__.columns.keys()}
 
     def _save_status(self, session, resource, status):
+        session, resource = session
         session.merge(type(resource)(**{
             c.name: status.get(c.name)
             for c in resource.__table__.columns
@@ -62,6 +69,6 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
     def logger(self, resource=None):
         logger = super().logger(resource)
         if resource is not None:
-            name = resource.__table__.name + '/' + resource.id
+            name = resource.__table__.name + '/' + str(resource.id)
             logger = logger.getChild(name)
         return logger
