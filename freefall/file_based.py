@@ -30,7 +30,7 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             json.dump(status, fp)
 
     def _status_path(self, resource):
-        return Path(self._archive_prefix(resource), '.status.json')
+        return Path(self.archive_prefix(resource), '.status.json')
 
     def _filelock_path(self, resource):
-        return Path(self._archive_prefix(resource), '.lock')
+        return Path(self.archive_prefix(resource), '.lock')
