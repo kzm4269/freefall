@@ -25,7 +25,7 @@ _Base.__repr__ = _repr_record
 class BaseSqlResource(_Base):
     __abstract__ = True
 
-    id = sa.Column(sa.Integer, primary_key=True)
+    id = sa.Column(sa.Integer, primary_key=True, nullable=False)
     downloading = sa.Column(sa.Boolean, nullable=False, default=False)
     completed = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
