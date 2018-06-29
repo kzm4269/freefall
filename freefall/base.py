@@ -1,6 +1,7 @@
 import logging
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
+from datetime import timedelta
 
 from .utils import utcnow
 
@@ -18,7 +19,7 @@ class ResourceError(Exception):
 
 
 class TemporaryResourceError(ResourceError):
-    def __init__(self, try_again_later, *args, **kwargs):
+    def __init__(self, *args, try_again_later=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._waiting_until = try_again_later or utcnow()
         if not try_again_later.tzinfo:
@@ -30,7 +31,7 @@ class TemporaryResourceError(ResourceError):
 
 
 class PartiallyCompleted(Exception):
-    def __init__(self, try_again_later, *args, **kwargs):
+    def __init__(self, *args, try_again_later=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._waiting_until = try_again_later or utcnow()
         if not try_again_later.tzinfo:
@@ -82,8 +83,11 @@ class BaseDownloader(metaclass=ABCMeta):
                 raise AlreadyDownloadingError()
             if status.get('completed'):
                 raise AlreadyCompletedError()
-            if status.get('waiting_until', utcnow()) > utcnow():
+
+            now = utcnow().replace(microsecond=0) + timedelta(seconds=1)
+            if status.get('waiting_until', now) > now:
                 raise TemporaryResourceError(
+                    'Please try again later {}'.format(status['waiting_until']),
                     try_again_later=status['waiting_until'])
 
             status['downloading'] = True
