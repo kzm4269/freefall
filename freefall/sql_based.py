@@ -17,7 +17,7 @@ class SqlBasedResource(sa.ext.declarative.declarative_base()):
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
 
     waiting_until = sa.Column(
-        sa.DateTime(timezone=True),
+        sa.TIMESTAMP(timezone=True),
         nullable=False, default=utcnow)
 
     def __repr__(self):
