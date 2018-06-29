@@ -1,11 +1,22 @@
 from abc import ABCMeta
 from contextlib import contextmanager
+from datetime import timezone, timedelta
 
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative
 
 from .base import BaseDownloader
 from .utils import utcnow
+
+
+class DateTime(sa.TypeDecorator):
+    impl = sa.DateTime
+
+    def process_bind_param(self, value, engine):
+        return value.replace(tzinfo=timezone(timedelta()))
+
+    def process_result_value(self, value, engine):
+        return value.replace(tzinfo=timezone(timedelta()))
 
 
 class SqlBasedResource(sa.ext.declarative.declarative_base()):
@@ -16,9 +27,7 @@ class SqlBasedResource(sa.ext.declarative.declarative_base()):
     completed = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
 
-    waiting_until = sa.Column(
-        sa.TIMESTAMP(timezone=True),
-        nullable=False, default=utcnow)
+    waiting_until = sa.Column(DateTime, nullable=False, default=utcnow)
 
     def __repr__(self):
         columns = ', '.join(
