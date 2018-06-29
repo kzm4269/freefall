@@ -2,25 +2,47 @@ import logging
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 
+from .utils import utcnow
 
-class Downloading(Exception):
+
+class AlreadyDownloadingError(Exception):
     pass
 
 
-class Completed(Exception):
+class AlreadyCompletedError(Exception):
     pass
 
 
-class RetryableError(Exception):
+class ResourceError(Exception):
     pass
 
 
-class NonRetryableError(Exception):
-    pass
+class TemporaryResourceError(ResourceError):
+    def __init__(self, try_again_later, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._waiting_until = try_again_later or utcnow()
+        if not try_again_later.tzinfo:
+            raise ValueError('no timezone')
+
+    @property
+    def waiting_until(self):
+        return self._waiting_until
+
+
+class PartiallyCompleted(Exception):
+    def __init__(self, try_again_later, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._waiting_until = try_again_later or utcnow()
+        if not try_again_later.tzinfo:
+            raise ValueError('no timezone')
+
+    @property
+    def waiting_until(self):
+        return self._waiting_until
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def download(self, args, ignore=(RetryableError, NonRetryableError)):
+    def download(self, args, ignore_exc=ResourceError):
         for resource in self.as_resources(args):
             logger = self.logger(resource)
             log_handler = self._log_handler(resource)
@@ -29,9 +51,9 @@ class BaseDownloader(metaclass=ABCMeta):
             try:
                 try:
                     self._download(resource)
-                except (Completed, Downloading):
+                except (AlreadyCompletedError, AlreadyDownloadingError):
                     raise
-                except (RetryableError, NonRetryableError) as e:
+                except ResourceError as e:
                     logger.warning('%s: %s', type(e).__name__, str(e))
                     logger.debug('Detail', exc_info=True)
                     raise
@@ -43,21 +65,26 @@ class BaseDownloader(metaclass=ABCMeta):
                 finally:
                     log_handler.close()
                     logger.removeHandler(log_handler)
-            except Completed:
-                logger.info('Already completed')
-            except Downloading:
-                logger.info('Already downloading')
-            except ignore or ():
+            except ignore_exc or ():
                 pass
+            except AlreadyCompletedError:
+                logger.info('Already completed')
+            except AlreadyDownloadingError:
+                logger.info('Already downloading')
+            except TemporaryResourceError:
+                logger.info('Resource temporary unavailable')
 
     def _download(self, resource):
         with self._exclusive_session(resource) as session:
             status = self._load_status(session, resource)
 
             if status.get('downloading'):
-                raise Downloading()
+                raise AlreadyDownloadingError()
             if status.get('completed'):
-                raise Completed()
+                raise AlreadyCompletedError()
+            if status.get('waiting_until', utcnow()) < utcnow():
+                raise TemporaryResourceError(
+                    try_again_later=status['waiting_until'])
 
             status['downloading'] = True
             status['completed'] = False
@@ -66,11 +93,17 @@ class BaseDownloader(metaclass=ABCMeta):
 
         try:
             self._force_download(resource)
-        except RetryableError:
+        except PartiallyCompleted as e:
+            status['waiting_until'] = e.waiting_until
+        except TemporaryResourceError as e:
+            status['waiting_until'] = e.waiting_until
             status['failed'] = True
             raise
-        except NonRetryableError:
+        except ResourceError:
             status['completed'] = True
+            status['failed'] = True
+            raise
+        except BaseException:
             status['failed'] = True
             raise
         else:

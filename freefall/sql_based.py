@@ -5,6 +5,7 @@ import sqlalchemy as sa
 import sqlalchemy.ext.declarative
 
 from .base import BaseDownloader
+from .utils import utcnow
 
 _Base = sa.ext.declarative.declarative_base()
 
@@ -29,6 +30,10 @@ class BaseSqlResource(_Base):
     downloading = sa.Column(sa.Boolean, nullable=False, default=False)
     completed = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
+
+    waiting_until = sa.Column(
+        sa.DateTime(timezone=True),
+        nullable=False, default=utcnow)
 
 
 class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
