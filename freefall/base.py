@@ -82,7 +82,7 @@ class BaseDownloader(metaclass=ABCMeta):
                 raise AlreadyDownloadingError()
             if status.get('completed'):
                 raise AlreadyCompletedError()
-            if status.get('waiting_until', utcnow()) < utcnow():
+            if status.get('waiting_until', utcnow()) > utcnow():
                 raise TemporaryResourceError(
                     try_again_later=status['waiting_until'])
 
