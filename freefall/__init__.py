@@ -1,6 +1,7 @@
 from .base import (
     AlreadyDownloadingError, AlreadyCompletedError,
-    TemporaryError, NonRetryableError,
+    ResourceError, TemporaryResourceError,
+    PartiallyCompleted,
 )
 from .file_based import FileBasedDownloader
-from .sql_based import SqlBasedDownloader, BaseSqlResource
+from .sql_based import SqlBasedDownloader, SqlBasedResource

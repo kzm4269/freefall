@@ -7,23 +7,8 @@ import sqlalchemy.ext.declarative
 from .base import BaseDownloader
 from .utils import utcnow
 
-_Base = sa.ext.declarative.declarative_base()
 
-
-def _repr_record(record):
-    if not isinstance(record, _Base):
-        raise TypeError(record)
-
-    columns = ', '.join(
-        '{}={!r}'.format(key, getattr(record, key))
-        for key in record.__table__.columns.keys())
-    return '{}({})'.format(type(record).__name__, columns)
-
-
-_Base.__repr__ = _repr_record
-
-
-class BaseSqlResource(_Base):
+class SqlBasedResource(sa.ext.declarative.declarative_base()):
     __abstract__ = True
 
     id = sa.Column(sa.Integer, primary_key=True, nullable=False)
@@ -34,6 +19,12 @@ class BaseSqlResource(_Base):
     waiting_until = sa.Column(
         sa.DateTime(timezone=True),
         nullable=False, default=utcnow)
+
+    def __repr__(self):
+        columns = ', '.join(
+            '{}={!r}'.format(key, getattr(self, key))
+            for key in self.__table__.columns.keys())
+        return '{}({})'.format(type(self).__name__, columns)
 
 
 class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
