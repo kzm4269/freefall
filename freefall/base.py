@@ -22,7 +22,7 @@ class TemporaryResourceError(ResourceError):
     def __init__(self, *args, try_again_later=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._waiting_until = try_again_later or utcnow()
-        if not try_again_later.tzinfo:
+        if not self._waiting_until.tzinfo:
             raise ValueError('no timezone')
 
     @property
@@ -34,7 +34,7 @@ class PartiallyCompleted(Exception):
     def __init__(self, *args, try_again_later=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._waiting_until = try_again_later or utcnow()
-        if not try_again_later.tzinfo:
+        if not self._waiting_until.tzinfo:
             raise ValueError('no timezone')
 
     @property
