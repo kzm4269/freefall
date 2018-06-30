@@ -1,7 +1,7 @@
 import logging
 from abc import ABCMeta, abstractmethod
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 
 from .utils import utcnow
 
@@ -68,14 +68,14 @@ class BaseDownloader(metaclass=ABCMeta):
                 finally:
                     log_handler.close()
                     logger.removeHandler(log_handler)
-            except ignore_exc or ():
-                pass
             except AlreadyCompletedError:
                 logger.info('Already completed')
             except AlreadyDownloadingError:
                 logger.info('Already downloading')
             except TemporaryResourceError:
                 logger.info('Resource temporary unavailable')
+            except ignore_exc or ():
+                pass
 
     def _download(self, resource):
         with self._exclusive_session(resource) as session:
