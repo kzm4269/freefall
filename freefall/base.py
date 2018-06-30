@@ -54,6 +54,8 @@ class BaseDownloader(metaclass=ABCMeta):
                     self._download(resource)
                 except (AlreadyCompletedError, AlreadyDownloadingError):
                     raise
+                except TemporaryResourceError:
+                    raise
                 except ResourceError as e:
                     logger.warning('%s: %s', type(e).__name__, str(e))
                     logger.debug('Detail', exc_info=True)
