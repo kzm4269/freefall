@@ -14,7 +14,7 @@ with open('LICENSE') as f:
 
 setup(
     name='freefall',
-    version='6.1.0',
+    version='6.1.1',
     description='Simple downloader',
     long_description=README,
     author='kzm4269',
