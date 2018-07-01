@@ -98,7 +98,11 @@ class BaseDownloader(metaclass=ABCMeta):
             self._save_status(session, resource, status)
 
         try:
-            self._force_download(resource)
+            try:
+                self._force_download(resource)
+            finally:
+                with self._exclusive_session(resource) as session:
+                    status = self._load_status(session, resource)
         except PartiallyCompleted as e:
             status['waiting_until'] = e.waiting_until
         except TemporaryResourceError as e:
