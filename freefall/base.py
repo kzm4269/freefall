@@ -60,7 +60,7 @@ class BaseDownloader(metaclass=ABCMeta):
                     logger.warning('%s: %s', type(e).__name__, str(e))
                     logger.debug('Detail', exc_info=True)
                     raise
-                except Exception as e:
+                except BaseException as e:
                     logger.exception(str(e))
                     raise
                 else:
