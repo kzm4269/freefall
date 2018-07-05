@@ -20,16 +20,16 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
     def __init__(self):
         self._filelock = {}
 
-    def _exclusive_session(self, resource):
-        path = str(self._filelock_path(resource))
+    def _exclusive_session(self, request):
+        path = str(self._filelock_path(request))
         if path not in self._filelock:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             self._filelock[path] = filelock.FileLock(path)
         return self._filelock[path]
 
-    def _load_status(self, session, resource):
+    def _load_status(self, session, request):
         try:
-            with open(str(self._status_path(resource))) as fp:
+            with open(str(self._status_path(request))) as fp:
                 status = json.load(fp)
                 if 'waiting_until' in status:
                     status['waiting_until'] = datetime.strptime(
@@ -38,12 +38,12 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
         except FileNotFoundError:
             return {}
 
-    def _save_status(self, session, resource, status):
-        with open(str(self._status_path(resource)), 'w') as fp:
+    def _save_status(self, session, request, status):
+        with open(str(self._status_path(request)), 'w') as fp:
             json.dump(status, fp, default=_object_hook)
 
-    def _status_path(self, resource):
-        return Path(self.archive_prefix(resource), '.status.json')
+    def _status_path(self, request):
+        return Path(self.archive_prefix(request), '.status.json')
 
-    def _filelock_path(self, resource):
-        return Path(self.archive_prefix(resource), '.lock')
+    def _filelock_path(self, request):
+        return Path(self.archive_prefix(request), '.lock')

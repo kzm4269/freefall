@@ -6,11 +6,11 @@ from pathlib import Path
 from .utils import utcnow
 
 
-class AlreadyDownloadingError(Exception):
+class AlreadyProcessingError(Exception):
     pass
 
 
-class AlreadyCompletedError(Exception):
+class AlreadyFinishedError(Exception):
     pass
 
 
@@ -44,15 +44,15 @@ class PartiallyCompleted(Exception):
 
 class BaseDownloader(metaclass=ABCMeta):
     def download(self, args, ignore_exc=ResourceError):
-        for resource in self.as_resources(args):
-            logger = self.logger(resource)
-            log_handler = self._log_handler(resource)
+        for request in self.as_requests(args):
+            logger = self.logger(request)
+            log_handler = self._log_handler(request)
             logger.addHandler(log_handler)
 
             try:
                 try:
-                    self._download(resource)
-                except (AlreadyCompletedError, AlreadyDownloadingError):
+                    self._process_request(request)
+                except (AlreadyFinishedError, AlreadyProcessingError):
                     raise
                 except TemporaryResourceError:
                     raise
@@ -64,27 +64,27 @@ class BaseDownloader(metaclass=ABCMeta):
                     logger.exception(str(e))
                     raise
                 else:
-                    logger.info('Completed successfully')
+                    logger.info('Finished successfully')
                 finally:
                     log_handler.close()
                     logger.removeHandler(log_handler)
-            except AlreadyCompletedError:
-                logger.info('Already completed')
-            except AlreadyDownloadingError:
+            except AlreadyFinishedError:
+                logger.info('Already finished')
+            except AlreadyProcessingError:
                 logger.info('Already downloading')
             except TemporaryResourceError:
-                logger.info('Resource temporary unavailable')
+                logger.info('Request temporary unavailable')
             except ignore_exc or ():
                 pass
 
-    def _download(self, resource):
-        with self._exclusive_session(resource) as session:
-            status = self._load_status(session, resource)
+    def _process_request(self, request):
+        with self._exclusive_session(request) as session:
+            status = self._load_status(session, request)
 
-            if status.get('downloading'):
-                raise AlreadyDownloadingError()
-            if status.get('completed'):
-                raise AlreadyCompletedError()
+            if status.get('processing'):
+                raise AlreadyProcessingError()
+            if status.get('finished'):
+                raise AlreadyFinishedError()
 
             now = utcnow().replace(microsecond=0) + timedelta(seconds=1)
             if status.get('waiting_until', now) > now:
@@ -92,17 +92,17 @@ class BaseDownloader(metaclass=ABCMeta):
                     'Please try again later {}'.format(status['waiting_until']),
                     try_again_later=status['waiting_until'])
 
-            status['downloading'] = True
-            status['completed'] = False
+            status['processing'] = True
+            status['finished'] = False
             status['failed'] = False
-            self._save_status(session, resource, status)
+            self._save_status(session, request, status)
 
         try:
             try:
-                self._force_download(resource)
+                self._force_download(request)
             finally:
-                with self._exclusive_session(resource) as session:
-                    status = self._load_status(session, resource)
+                with self._exclusive_session(request) as session:
+                    status = self._load_status(session, request)
         except PartiallyCompleted as e:
             status['waiting_until'] = e.waiting_until
         except TemporaryResourceError as e:
@@ -110,26 +110,26 @@ class BaseDownloader(metaclass=ABCMeta):
             status['failed'] = True
             raise
         except ResourceError:
-            status['completed'] = True
+            status['finished'] = True
             status['failed'] = True
             raise
         except BaseException:
             status['failed'] = True
             raise
         else:
-            status['completed'] = True
+            status['finished'] = True
         finally:
-            status['downloading'] = False
+            status['processing'] = False
 
-            with self._exclusive_session(resource) as session:
-                self._save_status(session, resource, status)
+            with self._exclusive_session(request) as session:
+                self._save_status(session, request, status)
 
-    def logger(self, resource=None):
+    def logger(self, request=None):
         name = type(self).__module__ + '.' + type(self).__name__
         return logging.getLogger(name)
 
-    def _log_handler(self, resource):
-        log_prefix = Path(self.archive_prefix(resource))
+    def _log_handler(self, request):
+        log_prefix = Path(self.archive_prefix(request))
         log_prefix.mkdir(exist_ok=True, parents=True)
         file_handler = logging.FileHandler(
             str(log_prefix / 'log.txt'), 'a', encoding='utf-8')
@@ -139,25 +139,25 @@ class BaseDownloader(metaclass=ABCMeta):
         return file_handler
 
     @abstractmethod
-    def as_resources(self, args):
+    def as_requests(self, args):
         pass
 
     @abstractmethod
-    def archive_prefix(self, resource):
+    def archive_prefix(self, request):
         pass
 
     @abstractmethod
-    def _force_download(self, resource):
+    def _force_download(self, request):
         pass
 
     @abstractmethod
-    def _exclusive_session(self, resource):
+    def _exclusive_session(self, request):
         pass
 
     @abstractmethod
-    def _load_status(self, session, resource):
+    def _load_status(self, session, request):
         pass
 
     @abstractmethod
-    def _save_status(self, session, resource, status):
+    def _save_status(self, session, request, status):
         pass
