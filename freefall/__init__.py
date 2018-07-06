@@ -1,6 +1,6 @@
 from .base import (
     AlreadyProcessingError, AlreadyFinishedError,
-    ResourceError, TemporaryResourceError,
+    ContentError, TemporaryContentError,
     PartiallyCompleted,
 )
 from .file_based import FileBasedDownloader

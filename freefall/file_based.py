@@ -1,5 +1,5 @@
 import json
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
@@ -47,3 +47,7 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
 
     def _filelock_path(self, request):
         return Path(self.archive_prefix(request), '.lock')
+
+    @abstractmethod
+    def archive_prefix(self, request):
+        pass
