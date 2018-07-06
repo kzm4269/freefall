@@ -69,17 +69,14 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             for key in request.__table__.columns.keys()}
 
     def _save_status(self, session, request, status):
-        session, request = session
+        session, record = session
         session.merge(type(request)(**{
             c.name: status.get(c.name)
-            for c in request.__table__.columns
+            for c in record.__table__.columns
             if status.get(c.name) is not None or c.nullable}))
 
     def _resource_type_name(self, request):
         return re.sub(r'(_|^)requests$', '', request.__table__.name)
-
-    def archive_prefix(self, request):
-        return Path(self._resource_type_name(request), str(request.id))
 
     def logger(self, request=None):
         logger = super().logger(request)

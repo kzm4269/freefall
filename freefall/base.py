@@ -14,11 +14,11 @@ class AlreadyFinishedError(Exception):
     pass
 
 
-class ResourceError(Exception):
+class ContentError(Exception):
     pass
 
 
-class TemporaryResourceError(ResourceError):
+class TemporaryContentError(ContentError):
     def __init__(self, *args, try_again_later=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._waiting_until = try_again_later or utcnow()
@@ -43,7 +43,7 @@ class PartiallyCompleted(Exception):
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def download(self, args, ignore_exc=ResourceError):
+    def process(self, args, ignore_exc=ContentError):
         for request in self.as_requests(args):
             logger = self.logger(request)
             log_handler = self._log_handler(request)
@@ -51,12 +51,12 @@ class BaseDownloader(metaclass=ABCMeta):
 
             try:
                 try:
-                    self._process_request(request)
+                    self._process(request)
                 except (AlreadyFinishedError, AlreadyProcessingError):
                     raise
-                except TemporaryResourceError:
+                except TemporaryContentError:
                     raise
-                except ResourceError as e:
+                except ContentError as e:
                     logger.warning('%s: %s', type(e).__name__, str(e))
                     logger.debug('Detail', exc_info=True)
                     raise
@@ -64,20 +64,20 @@ class BaseDownloader(metaclass=ABCMeta):
                     logger.exception(str(e))
                     raise
                 else:
-                    logger.info('Finished successfully')
+                    logger.info('Completed')
                 finally:
                     log_handler.close()
                     logger.removeHandler(log_handler)
             except AlreadyFinishedError:
                 logger.info('Already finished')
             except AlreadyProcessingError:
-                logger.info('Already downloading')
-            except TemporaryResourceError:
-                logger.info('Request temporary unavailable')
+                logger.info('Already processing')
+            except TemporaryContentError:
+                logger.info('Content temporary unavailable')
             except ignore_exc or ():
                 pass
 
-    def _process_request(self, request):
+    def _process(self, request):
         with self._exclusive_session(request) as session:
             status = self._load_status(session, request)
 
@@ -88,7 +88,7 @@ class BaseDownloader(metaclass=ABCMeta):
 
             now = utcnow().replace(microsecond=0) + timedelta(seconds=1)
             if status.get('waiting_until', now) > now:
-                raise TemporaryResourceError(
+                raise TemporaryContentError(
                     'Please try again later {}'.format(status['waiting_until']),
                     try_again_later=status['waiting_until'])
 
@@ -99,17 +99,17 @@ class BaseDownloader(metaclass=ABCMeta):
 
         try:
             try:
-                self._force_download(request)
+                self._force_process(request)
             finally:
                 with self._exclusive_session(request) as session:
                     status = self._load_status(session, request)
         except PartiallyCompleted as e:
             status['waiting_until'] = e.waiting_until
-        except TemporaryResourceError as e:
+        except TemporaryContentError as e:
             status['waiting_until'] = e.waiting_until
             status['failed'] = True
             raise
-        except ResourceError:
+        except ContentError:
             status['finished'] = True
             status['failed'] = True
             raise
@@ -129,7 +129,11 @@ class BaseDownloader(metaclass=ABCMeta):
         return logging.getLogger(name)
 
     def _log_handler(self, request):
-        log_prefix = Path(self.archive_prefix(request))
+        log_prefix = self.archive_prefix(request)
+        if log_prefix is None:
+            return logging.NullHandler()
+        log_prefix = Path(log_prefix)
+
         log_prefix.mkdir(exist_ok=True, parents=True)
         file_handler = logging.FileHandler(
             str(log_prefix / 'log.txt'), 'a', encoding='utf-8')
@@ -138,16 +142,15 @@ class BaseDownloader(metaclass=ABCMeta):
         file_handler.setLevel('DEBUG')
         return file_handler
 
+    def archive_prefix(self, request):
+        return None
+
     @abstractmethod
     def as_requests(self, args):
         pass
 
     @abstractmethod
-    def archive_prefix(self, request):
-        pass
-
-    @abstractmethod
-    def _force_download(self, request):
+    def _force_process(self, request):
         pass
 
     @abstractmethod
