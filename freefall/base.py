@@ -43,7 +43,7 @@ class PartiallyCompleted(Exception):
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def process(self, args, ignore_exc=ContentError):
+    def download(self, args, ignore_exc=ContentError):
         for request in self.as_requests(args):
             logger = self.logger(request)
             log_handler = self._log_handler(request)
