@@ -2,7 +2,6 @@ import re
 from abc import ABCMeta
 from contextlib import contextmanager
 from datetime import timezone, timedelta
-from pathlib import Path
 
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative
@@ -15,10 +14,14 @@ class DateTime(sa.TypeDecorator):
     impl = sa.DateTime
 
     def process_bind_param(self, value, engine):
-        return value.replace(tzinfo=timezone(timedelta()))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone(timedelta()))
+        return value.astimezone(timezone(timedelta()))
 
     def process_result_value(self, value, engine):
-        return value.replace(tzinfo=timezone(timedelta()))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone(timedelta()))
+        return value.astimezone(timezone(timedelta()))
 
 
 class SqlBasedRequest(sa.ext.declarative.declarative_base()):
