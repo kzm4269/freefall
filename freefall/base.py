@@ -83,6 +83,9 @@ class BaseDownloader(metaclass=ABCMeta):
             except ignore_exc or ():
                 pass
 
+    def _download_child(self, args, ignore_exc=(AlreadyFinishedError,)):
+        self.download(args, ignore_exc=ignore_exc)
+
     def _process(self, request):
         with self._exclusive_session(request) as session:
             status = self._load_status(session, request)
