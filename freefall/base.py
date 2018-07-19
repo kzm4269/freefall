@@ -43,7 +43,9 @@ class PartiallyCompleted(Exception):
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def download(self, args, ignore_exc=ContentError):
+    def download(self, args, ignore_exc=(
+            AlreadyProcessingError, AlreadyFinishedError, ContentError)):
+
         for request in self.as_requests(args):
             logger = self.logger(request)
             log_handler = self._log_handler(request)
@@ -51,29 +53,33 @@ class BaseDownloader(metaclass=ABCMeta):
 
             try:
                 try:
-                    self._process(request)
-                except (AlreadyFinishedError, AlreadyProcessingError):
+                    try:
+                        self._process(request)
+                    except (AlreadyFinishedError, AlreadyProcessingError):
+                        raise
+                    except TemporaryContentError:
+                        raise
+                    except ContentError as e:
+                        logger.warning('%s: %s', type(e).__name__, str(e))
+                        logger.debug('Detail', exc_info=True)
+                        raise
+                    except BaseException as e:
+                        logger.exception(str(e))
+                        raise
+                    else:
+                        logger.info('Completed')
+                    finally:
+                        log_handler.close()
+                        logger.removeHandler(log_handler)
+                except AlreadyFinishedError:
+                    logger.info('Already finished')
+                    raise
+                except AlreadyProcessingError:
+                    logger.info('Already processing')
                     raise
                 except TemporaryContentError:
+                    logger.info('Content temporary unavailable')
                     raise
-                except ContentError as e:
-                    logger.warning('%s: %s', type(e).__name__, str(e))
-                    logger.debug('Detail', exc_info=True)
-                    raise
-                except BaseException as e:
-                    logger.exception(str(e))
-                    raise
-                else:
-                    logger.info('Completed')
-                finally:
-                    log_handler.close()
-                    logger.removeHandler(log_handler)
-            except AlreadyFinishedError:
-                logger.info('Already finished')
-            except AlreadyProcessingError:
-                logger.info('Already processing')
-            except TemporaryContentError:
-                logger.info('Content temporary unavailable')
             except ignore_exc or ():
                 pass
 
@@ -89,7 +95,8 @@ class BaseDownloader(metaclass=ABCMeta):
             now = utcnow().replace(microsecond=0) + timedelta(seconds=1)
             if status.get('waiting_until', now) > now:
                 raise TemporaryContentError(
-                    'Please try again later {}'.format(status['waiting_until']),
+                    'Please try again later {}'.format(
+                        status['waiting_until']),
                     try_again_later=status['waiting_until'])
 
             status['processing'] = True
