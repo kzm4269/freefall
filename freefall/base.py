@@ -161,9 +161,8 @@ class BaseDownloader(metaclass=ABCMeta):
     def archive_prefix(self, request):
         return None
 
-    @abstractmethod
     def as_requests(self, args):
-        pass
+        return iter(args)
 
     @abstractmethod
     def _process_request(self, request):
