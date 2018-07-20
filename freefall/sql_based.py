@@ -92,3 +92,8 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             name = self._resource_type_name(request) + '/' + str(request.id)
             logger = logger.getChild(name)
         return logger
+
+    def request(self, args):
+        for request_ in self.as_requests(args):
+            with self._exclusive_session(request_):
+                pass
