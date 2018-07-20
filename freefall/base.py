@@ -25,7 +25,7 @@ class RequestClosed(Exception):
         return self._retry_datetime
 
 
-class ContentError(Exception):
+class _ContentError(Exception):
     def __init__(self, *args, **kwargs):
         retry_interval = kwargs.pop('retry_interval', None)
         if retry_interval is None:
@@ -40,6 +40,17 @@ class ContentError(Exception):
     @property
     def retry_datetime(self):
         return self._retry_datetime
+
+
+class FatalContentError(_ContentError):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, retry_interval=None, **kwargs)
+
+
+class TemporaryContentError(_ContentError):
+    def __init__(self, *args, **kwargs):
+        retry_interval = kwargs.pop('retry_interval', 0)
+        super().__init__(*args, retry_interval=retry_interval, **kwargs)
 
 
 class UnfinishedContent(Exception):
@@ -60,7 +71,7 @@ class UnfinishedContent(Exception):
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def download(self, args, ignore_exc=(RequestClosed, ContentError)):
+    def download(self, args, ignore_exc=(RequestClosed, _ContentError)):
         for request in self.as_requests(args):
             try:
                 self.process_request(request)
@@ -102,7 +113,7 @@ class BaseDownloader(metaclass=ABCMeta):
                 except UnfinishedContent as e:
                     status['failed'] = False
                     status['scheduled_for'] = e.retry_datetime
-                except ContentError as e:
+                except _ContentError as e:
                     status['failed'] = True
                     status['scheduled_for'] = e.retry_datetime
                     raise
@@ -118,7 +129,7 @@ class BaseDownloader(metaclass=ABCMeta):
                         self._save_status(session, request, status)
             except RequestClosed:
                 raise
-            except ContentError as e:
+            except _ContentError as e:
                 logger.error('%s: %s', type(e).__name__, str(e))
                 logger.debug('Detail', exc_info=True)
                 raise
