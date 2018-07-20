@@ -14,37 +14,50 @@ class AlreadyFinishedError(Exception):
     pass
 
 
+class RequestDeferredError(Exception):
+    def __init__(self, *args, deferred_until=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._deferred_until = deferred_until or utcnow()
+        if not self._deferred_until.tzinfo:
+            raise ValueError('no timezone')
+
+    @property
+    def deferred_until(self):
+        return self._deferred_until
+
+
 class ContentError(Exception):
     pass
 
 
 class TemporaryContentError(ContentError):
-    def __init__(self, *args, try_again_later=None, **kwargs):
+    def __init__(self, *args, deferred_until=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self._waiting_until = try_again_later or utcnow()
-        if not self._waiting_until.tzinfo:
+        self._deferred_until = deferred_until or utcnow()
+        if not self._deferred_until.tzinfo:
             raise ValueError('no timezone')
 
     @property
-    def waiting_until(self):
-        return self._waiting_until
+    def deferred_until(self):
+        return self._deferred_until
 
 
 class PartiallyCompleted(Exception):
-    def __init__(self, *args, try_again_later=None, **kwargs):
+    def __init__(self, *args, deferred_until=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self._waiting_until = try_again_later or utcnow()
-        if not self._waiting_until.tzinfo:
+        self._deferred_until = deferred_until or utcnow()
+        if not self._deferred_until.tzinfo:
             raise ValueError('no timezone')
 
     @property
-    def waiting_until(self):
-        return self._waiting_until
+    def deferred_until(self):
+        return self._deferred_until
 
 
 class BaseDownloader(metaclass=ABCMeta):
     def download(self, args, ignore_exc=(
-            AlreadyProcessingError, AlreadyFinishedError, ContentError)):
+            AlreadyProcessingError, AlreadyFinishedError, RequestDeferredError,
+            ContentError)):
 
         for request in self.as_requests(args):
             logger = self.logger(request)
@@ -57,7 +70,7 @@ class BaseDownloader(metaclass=ABCMeta):
                         self._process(request)
                     except (AlreadyFinishedError, AlreadyProcessingError):
                         raise
-                    except TemporaryContentError:
+                    except RequestDeferredError:
                         raise
                     except ContentError as e:
                         logger.error('%s: %s', type(e).__name__, str(e))
@@ -77,15 +90,12 @@ class BaseDownloader(metaclass=ABCMeta):
                 except AlreadyProcessingError:
                     logger.info('Already processing')
                     raise
-                except TemporaryContentError as e:
-                    logger.info('Content temporary unavailable: ' + str(e))
+                except RequestDeferredError as e:
+                    logger.info('Reqest deffered: ' + str(e))
                     logger.debug('Detail', exc_info=True)
                     raise
             except ignore_exc or ():
                 pass
-
-    def _download_child(self, args, ignore_exc=(AlreadyFinishedError,)):
-        self.download(args, ignore_exc=ignore_exc)
 
     def _process(self, request):
         with self._exclusive_session(request) as session:
@@ -97,11 +107,11 @@ class BaseDownloader(metaclass=ABCMeta):
                 raise AlreadyFinishedError()
 
             now = utcnow().replace(microsecond=0) + timedelta(seconds=1)
-            if status.get('waiting_until', now) > now:
-                raise TemporaryContentError(
+            if status.get('deferred_until', now) > now:
+                raise RequestDeferredError(
                     'Please try again later {}'.format(
-                        status['waiting_until']),
-                    try_again_later=status['waiting_until'])
+                        status['deferred_until']),
+                    deferred_until=status['deferred_until'])
 
             status['processing'] = True
             status['finished'] = False
@@ -115,9 +125,9 @@ class BaseDownloader(metaclass=ABCMeta):
                 with self._exclusive_session(request) as session:
                     status = self._load_status(session, request)
         except PartiallyCompleted as e:
-            status['waiting_until'] = e.waiting_until
+            status['deferred_until'] = e.deferred_until
         except TemporaryContentError as e:
-            status['waiting_until'] = e.waiting_until
+            status['deferred_until'] = e.deferred_until
             status['failed'] = True
             raise
         except ContentError:
