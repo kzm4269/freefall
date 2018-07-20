@@ -6,8 +6,9 @@ from pathlib import Path
 import filelock
 
 from .base import BaseDownloader
+from .utils import localnow
 
-_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
+_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%f%z'
 
 
 def _object_hook(obj):
@@ -31,12 +32,17 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
         try:
             with open(str(self._status_path(request))) as fp:
                 status = json.load(fp)
-                if 'deferred_until' in status:
-                    status['deferred_until'] = datetime.strptime(
-                        status['deferred_until'], _DATETIME_FORMAT)
+                if status.get('scheduled_for'):
+                    status['scheduled_for'] = datetime.strptime(
+                        status['scheduled_for'],
+                        _DATETIME_FORMAT)
                 return status
         except FileNotFoundError:
-            return {}
+            return {
+                'processing': False,
+                'failed': False,
+                'scheduled_for': localnow(),
+            }
 
     def _save_status(self, session, request, status):
         with open(str(self._status_path(request)), 'w') as fp:

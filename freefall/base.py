@@ -1,149 +1,144 @@
 import logging
 from abc import ABCMeta, abstractmethod
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pathlib import Path
 
-from .utils import utcnow
+from .utils import localnow
 
 
-class AlreadyProcessingError(Exception):
-    pass
+class RequestClosed(Exception):
+    def __init__(self, *args, **kwargs):
+        self._failed = kwargs.pop('failed', None)
+        self._retry_datetime = kwargs.pop('retry_datetime', None)
+        if self._retry_datetime:
+            assert isinstance(self._retry_datetime, datetime)
+            self._retry_datetime.astimezone()
 
-
-class AlreadyFinishedError(Exception):
-    pass
-
-
-class RequestDeferredError(Exception):
-    def __init__(self, *args, deferred_until=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self._deferred_until = deferred_until or utcnow()
-        if not self._deferred_until.tzinfo:
-            raise ValueError('no timezone')
 
     @property
-    def deferred_until(self):
-        return self._deferred_until
+    def failed(self):
+        return self._failed
+
+    @property
+    def retry_datetime(self):
+        return self._retry_datetime
 
 
 class ContentError(Exception):
-    pass
+    def __init__(self, *args, **kwargs):
+        retry_interval = kwargs.pop('retry_interval', None)
+        if retry_interval is None:
+            self._retry_datetime = None
+        else:
+            if isinstance(retry_interval, (int, float)):
+                retry_interval = timedelta(seconds=retry_interval)
+            self._retry_datetime = localnow() + retry_interval
 
-
-class TemporaryContentError(ContentError):
-    def __init__(self, *args, deferred_until=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self._deferred_until = deferred_until or utcnow()
-        if not self._deferred_until.tzinfo:
-            raise ValueError('no timezone')
 
     @property
-    def deferred_until(self):
-        return self._deferred_until
+    def retry_datetime(self):
+        return self._retry_datetime
 
 
-class PartiallyCompleted(Exception):
-    def __init__(self, *args, deferred_until=None, **kwargs):
+class UnfinishedContent(Exception):
+    def __init__(self, *args, **kwargs):
+        retry_interval = kwargs.pop('retry_interval', None)
+        if retry_interval is None:
+            self._retry_datetime = None
+        else:
+            if isinstance(retry_interval, (int, float)):
+                retry_interval = timedelta(seconds=retry_interval)
+            self._retry_datetime = localnow() + retry_interval
+
         super().__init__(*args, **kwargs)
-        self._deferred_until = deferred_until or utcnow()
-        if not self._deferred_until.tzinfo:
-            raise ValueError('no timezone')
 
     @property
-    def deferred_until(self):
-        return self._deferred_until
+    def retry_datetime(self):
+        return self._retry_datetime
 
 
 class BaseDownloader(metaclass=ABCMeta):
-    def download(self, args, ignore_exc=(
-            AlreadyProcessingError, AlreadyFinishedError, RequestDeferredError,
-            ContentError)):
-
+    def download(self, args, ignore_exc=(RequestClosed, ContentError)):
         for request in self.as_requests(args):
-            logger = self.logger(request)
-            log_handler = self._log_handler(request)
-            logger.addHandler(log_handler)
-
             try:
-                try:
-                    try:
-                        self._process(request)
-                    except (AlreadyFinishedError, AlreadyProcessingError):
-                        raise
-                    except RequestDeferredError:
-                        raise
-                    except ContentError as e:
-                        logger.error('%s: %s', type(e).__name__, str(e))
-                        logger.debug('Detail', exc_info=True)
-                        raise
-                    except BaseException as e:
-                        logger.exception(str(e))
-                        raise
-                    else:
-                        logger.info('Completed')
-                    finally:
-                        log_handler.close()
-                        logger.removeHandler(log_handler)
-                except AlreadyFinishedError:
-                    logger.info('Already finished')
-                    raise
-                except AlreadyProcessingError:
-                    logger.info('Already processing')
-                    raise
-                except RequestDeferredError as e:
-                    logger.info('Reqest deffered: ' + str(e))
-                    logger.debug('Detail', exc_info=True)
-                    raise
+                self.process_request(request)
             except ignore_exc or ():
                 pass
 
-    def _process(self, request):
-        with self._exclusive_session(request) as session:
-            status = self._load_status(session, request)
-
-            if status.get('processing'):
-                raise AlreadyProcessingError()
-            if status.get('finished'):
-                raise AlreadyFinishedError()
-
-            now = utcnow().replace(microsecond=0) + timedelta(seconds=1)
-            if status.get('deferred_until', now) > now:
-                raise RequestDeferredError(
-                    'Please try again later {}'.format(
-                        status['deferred_until']),
-                    deferred_until=status['deferred_until'])
-
-            status['processing'] = True
-            status['finished'] = False
-            status['failed'] = False
-            self._save_status(session, request, status)
+    def process_request(self, request):
+        logger = self.logger(request)
+        log_handler = self._log_handler(request)
+        logger.addHandler(log_handler)
 
         try:
             try:
-                self._force_process(request)
-            finally:
                 with self._exclusive_session(request) as session:
                     status = self._load_status(session, request)
-        except PartiallyCompleted as e:
-            status['deferred_until'] = e.deferred_until
-        except TemporaryContentError as e:
-            status['deferred_until'] = e.deferred_until
-            status['failed'] = True
-            raise
-        except ContentError:
-            status['finished'] = True
-            status['failed'] = True
-            raise
-        except BaseException:
-            status['failed'] = True
-            raise
-        else:
-            status['finished'] = True
-        finally:
-            status['processing'] = False
 
-            with self._exclusive_session(request) as session:
-                self._save_status(session, request, status)
+                    if status['processing']:
+                        raise RequestClosed('already processing')
+                    elif (status['scheduled_for'] is None
+                          or status['scheduled_for'] > localnow()):
+                        raise RequestClosed(
+                            failed=status['failed'],
+                            retry_datetime=status['scheduled_for'])
+
+                    status['processing'] = True
+                    status['failed'] = False
+                    status['scheduled_for'] = None
+                    self._save_status(session, request, status)
+
+                try:
+                    try:
+                        self._process_request(request)
+                    except RequestClosed as e:
+                        raise RuntimeError from e
+                    finally:
+                        with self._exclusive_session(request) as session:
+                            status = self._load_status(session, request)
+                        status['processing'] = False
+                except UnfinishedContent as e:
+                    status['failed'] = False
+                    status['scheduled_for'] = e.retry_datetime
+                except ContentError as e:
+                    status['failed'] = True
+                    status['scheduled_for'] = e.retry_datetime
+                    raise
+                except BaseException:
+                    status['failed'] = True
+                    status['scheduled_for'] = localnow()
+                    raise
+                else:
+                    status['failed'] = False
+                    status['scheduled_for'] = None
+                finally:
+                    with self._exclusive_session(request) as session:
+                        self._save_status(session, request, status)
+            except RequestClosed:
+                raise
+            except ContentError as e:
+                logger.error('%s: %s', type(e).__name__, str(e))
+                logger.debug('Detail', exc_info=True)
+                raise
+            except BaseException as e:
+                logger.exception(str(e))
+                raise
+            else:
+                logger.info('Completed successfully')
+            finally:
+                log_handler.close()
+                logger.removeHandler(log_handler)
+        except RequestClosed as e:
+            if e.retry_datetime:
+                logger.error('Temporarily closed until {}'.format(
+                    e.retry_datetime.astimezone()))
+            elif e.failed:
+                logger.error('Closed')
+            else:
+                logger.info('Already completed')
+            raise
 
     def logger(self, request=None):
         name = type(self).__module__ + '.' + type(self).__name__
@@ -171,7 +166,7 @@ class BaseDownloader(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _force_process(self, request):
+    def _process_request(self, request):
         pass
 
     @abstractmethod
