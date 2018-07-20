@@ -1,29 +1,27 @@
 import re
 from abc import ABCMeta
 from contextlib import contextmanager
+from datetime import timezone
 
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative
 
 from .base import BaseDownloader
-from .utils import localnow, local_timezone
+from .utils import localnow
 
 
-class DateTime(sa.TypeDecorator):
-    impl = sa.DateTime
+class Timestamp(sa.TypeDecorator):
+    impl = sa.TIMESTAMP
 
     def process_bind_param(self, value, engine):
-        # if value.tzinfo is None:
-        #     value = value.replace(tzinfo=local_timezone())
         if value is not None:
-            value = value.astimezone()
+            value = value.astimezone().astimezone(timezone.utc)
         return value
 
     def process_result_value(self, value, engine):
-        # if value.tzinfo is None:
-        #     value = value.replace(tzinfo=local_timezone())
         if value is not None:
-            value = value.astimezone()
+            assert value.tzinfo is None, value
+            value = value.replace(tzinfo=timezone.utc).astimezone()
         return value
 
 
@@ -36,7 +34,7 @@ class SqlBasedRequest(sa.ext.declarative.declarative_base()):
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
     closed = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
-    scheduled_for = sa.Column(DateTime, nullable=True, default=localnow)
+    scheduled_for = sa.Column(Timestamp, nullable=True, default=localnow)
 
     def __repr__(self):
         columns = ', '.join(
