@@ -60,7 +60,7 @@ class BaseDownloader(metaclass=ABCMeta):
                     except TemporaryContentError:
                         raise
                     except ContentError as e:
-                        logger.warning('%s: %s', type(e).__name__, str(e))
+                        logger.error('%s: %s', type(e).__name__, str(e))
                         logger.debug('Detail', exc_info=True)
                         raise
                     except BaseException as e:
@@ -77,8 +77,9 @@ class BaseDownloader(metaclass=ABCMeta):
                 except AlreadyProcessingError:
                     logger.info('Already processing')
                     raise
-                except TemporaryContentError:
-                    logger.info('Content temporary unavailable')
+                except TemporaryContentError as e:
+                    logger.info('Content temporary unavailable: ' + str(e))
+                    logger.debug('Detail', exc_info=True)
                     raise
             except ignore_exc or ():
                 pass
