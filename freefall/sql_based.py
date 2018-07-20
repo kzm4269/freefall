@@ -32,7 +32,6 @@ class SqlBasedRequest(sa.ext.declarative.declarative_base()):
     id = sa.Column(sa.Integer, nullable=False, primary_key=True)
 
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
-    closed = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
     scheduled_for = sa.Column(Timestamp, nullable=True, default=localnow)
 
