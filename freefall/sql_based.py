@@ -33,7 +33,7 @@ class SqlBasedRequest(sa.ext.declarative.declarative_base()):
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
     finished = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
-    waiting_until = sa.Column(DateTime, nullable=False, default=utcnow)
+    deferred_until = sa.Column(DateTime, nullable=False, default=utcnow)
 
     def __repr__(self):
         columns = ', '.join(

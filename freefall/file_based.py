@@ -31,9 +31,9 @@ class FileBasedDownloader(BaseDownloader, metaclass=ABCMeta):
         try:
             with open(str(self._status_path(request))) as fp:
                 status = json.load(fp)
-                if 'waiting_until' in status:
-                    status['waiting_until'] = datetime.strptime(
-                        status['waiting_until'], _DATETIME_FORMAT)
+                if 'deferred_until' in status:
+                    status['deferred_until'] = datetime.strptime(
+                        status['deferred_until'], _DATETIME_FORMAT)
                 return status
         except FileNotFoundError:
             return {}
