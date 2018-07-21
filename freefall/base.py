@@ -163,7 +163,7 @@ class BaseDownloader(metaclass=ABCMeta):
 
         log_prefix.mkdir(exist_ok=True, parents=True)
         file_handler = logging.FileHandler(
-            str(log_prefix / 'log.txt'), 'a', encoding='utf-8')
+            str(log_prefix / '.log'), 'a', encoding='utf-8')
         file_handler.setFormatter(logging.Formatter(
             '[%(asctime)s] %(name)s: %(levelname)s: %(message)s'))
         file_handler.setLevel('DEBUG')
