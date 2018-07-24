@@ -98,7 +98,7 @@ class BaseDownloader(metaclass=ABCMeta):
 
                     status['processing'] = True
                     status['failed'] = False
-                    status['scheduled_for'] = None
+                    status['scheduled_for'] = localnow()
                     self._save_status(session, request, status)
 
                 try:
