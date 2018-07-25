@@ -10,8 +10,8 @@ from .base import BaseDownloader
 from .utils import localnow
 
 
-class Timestamp(sa.TypeDecorator):
-    impl = sa.TIMESTAMP
+class UtcDateTime(sa.TypeDecorator):
+    impl = sa.DateTime
 
     def process_bind_param(self, value, engine):
         if value is not None:
@@ -21,7 +21,9 @@ class Timestamp(sa.TypeDecorator):
     def process_result_value(self, value, engine):
         if value is not None:
             assert value.tzinfo is None, value
-            value = value.replace(tzinfo=timezone.utc).astimezone()
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            value = value.astimezone()
         return value
 
 
@@ -33,7 +35,7 @@ class SqlBasedRequest(sa.ext.declarative.declarative_base()):
 
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
-    scheduled_for = sa.Column(Timestamp, nullable=True, default=localnow)
+    scheduled_for = sa.Column(UtcDateTime, nullable=True, default=localnow)
 
     def __repr__(self):
         columns = ', '.join(
