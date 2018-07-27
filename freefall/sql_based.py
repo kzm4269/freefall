@@ -27,7 +27,7 @@ class UtcDateTime(sa.TypeDecorator):
 
 class SqlBasedRequest(sa.ext.declarative.declarative_base()):
     __abstract__ = True
-    __tablename__ = 'download_request'
+    __tablename__ = 'download'
 
     id = sa.Column(sa.Integer, primary_key=True)
 
@@ -84,7 +84,7 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
 
     def _resource_type_name(self, request):
         return re.sub(
-            r'(_|^)(download_)?request$', '',
+            r'(_|^)download$', '',
             request.__table__.name)
 
     def logger(self, request=None):
