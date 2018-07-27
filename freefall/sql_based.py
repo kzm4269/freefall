@@ -83,7 +83,8 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             for c in record.__table__.columns
             if status.get(c.name) is not None or c.nullable}))
 
-    def _resource_type_name(self, request):
+    @staticmethod
+    def _content_type_name(request):
         return re.sub(
             r'(_|^)download$', '',
             request.__table__.name)
@@ -91,7 +92,7 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
     def logger(self, request=None):
         logger = super().logger(request)
         if request is not None:
-            name = self._resource_type_name(request) + '/' + str(request.id)
+            name = self._content_type_name(request) + '/' + str(request.id)
             logger = logger.getChild(name)
         return logger
 
