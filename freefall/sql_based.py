@@ -33,7 +33,8 @@ class SqlBasedRequest(sa.ext.declarative.declarative_base()):
 
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
-    scheduled_for = sa.Column(UtcDateTime, nullable=True, default=localnow)
+    scheduled_for = sa.Column(
+        UtcDateTime(timezone=True), nullable=True, default=localnow)
 
     def __repr__(self):
         columns = ', '.join(
