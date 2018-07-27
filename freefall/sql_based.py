@@ -43,10 +43,6 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
     def __init__(self, sessionmaker):
         self._sessionmaker = sessionmaker
 
-    @property
-    def session(self):
-        return self._sessionmaker
-
     @contextmanager
     def _exclusive_session(self, request):
         session = self._sessionmaker(autocommit=False)
