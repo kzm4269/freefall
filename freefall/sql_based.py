@@ -1,10 +1,9 @@
 import re
-from abc import ABCMeta
-from contextlib import contextmanager
-from datetime import timezone
-
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative
+from abc import ABCMeta
+from contextlib import contextmanager
+from datetime import timezone, datetime
 
 from .base import BaseDownloader
 from .utils import localnow
@@ -14,13 +13,12 @@ class UtcDateTime(sa.TypeDecorator):
     impl = sa.DateTime
 
     def process_bind_param(self, value, engine):
-        if value is not None:
+        if isinstance(value, datetime):
             value = value.astimezone().astimezone(timezone.utc)
         return value
 
     def process_result_value(self, value, engine):
-        if value is not None:
-            assert value.tzinfo is None, value
+        if isinstance(value, datetime):
             if value.tzinfo is None:
                 value = value.replace(tzinfo=timezone.utc)
             value = value.astimezone()
@@ -29,9 +27,9 @@ class UtcDateTime(sa.TypeDecorator):
 
 class SqlBasedRequest(sa.ext.declarative.declarative_base()):
     __abstract__ = True
-    __tablename__ = 'requests'
+    __tablename__ = 'download_request'
 
-    id = sa.Column(sa.Integer, nullable=False, primary_key=True)
+    id = sa.Column(sa.Integer, primary_key=True)
 
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
     failed = sa.Column(sa.Boolean, nullable=False, default=False)
@@ -85,7 +83,9 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
             if status.get(c.name) is not None or c.nullable}))
 
     def _resource_type_name(self, request):
-        return re.sub(r'(_|^)requests$', '', request.__table__.name)
+        return re.sub(
+            r'(_|^)(download_)?request$', '',
+            request.__table__.name)
 
     def logger(self, request=None):
         logger = super().logger(request)
