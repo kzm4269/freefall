@@ -1,6 +1,5 @@
 import re
 import sqlalchemy as sa
-import sqlalchemy.ext.declarative
 from abc import ABCMeta
 from contextlib import contextmanager
 from datetime import timezone, datetime
@@ -25,10 +24,7 @@ class UtcDateTime(sa.TypeDecorator):
         return value
 
 
-class SqlBasedRequest(sa.ext.declarative.declarative_base()):
-    __abstract__ = True
-    __tablename__ = 'download'
-
+class SqlBasedRequest:
     id = sa.Column(sa.Integer, primary_key=True)
 
     processing = sa.Column(sa.Boolean, nullable=False, default=False)
