@@ -49,22 +49,26 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
 
     @contextmanager
     def _exclusive_session(self, request):
-        session = self._sessionmaker(autocommit=True)
+        session = self._sessionmaker(autocommit=False)
 
         try:
-            with session.begin():
-                if session.bind.name == 'sqlite':
-                    session.execute('BEGIN EXCLUSIVE')
+            if session.bind.name == 'sqlite':
+                session.execute('BEGIN EXCLUSIVE')
 
-                query = session.query(type(request)).with_for_update()
+            query = session.query(type(request)).with_for_update()
+            bounded_request = query.get(request.id)
+
+            if bounded_request is None:
+                session.add(request)
                 bounded_request = query.get(request.id)
-                if bounded_request is None:
-                    session.add(request)
-                    bounded_request = query.get(request.id)
-                    session.expunge(request)
-                yield session, bounded_request
-        finally:
-            session.close()
+                session.expunge(request)
+
+            yield session, bounded_request
+        except BaseException:
+            session.rollback()
+            raise
+        else:
+            session.commit()
 
     def _load_status(self, session, request):
         session, request = session
