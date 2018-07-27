@@ -93,6 +93,6 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
         return logger
 
     def request(self, args):
-        for request_ in self.as_requests(args):
-            with self._exclusive_session(request_):
-                pass
+        for request in self.as_requests(args):
+            with self._exclusive_session(request):
+                self.logger(request).info('Request')
