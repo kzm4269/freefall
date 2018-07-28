@@ -45,7 +45,7 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
 
     @contextmanager
     def _exclusive_session(self, request):
-        session = self._sessionmaker(autocommit=False)
+        session = self._sessionmaker()
 
         try:
             if session.bind.name == 'sqlite':
@@ -60,11 +60,9 @@ class SqlBasedDownloader(BaseDownloader, metaclass=ABCMeta):
                 session.expunge(request)
 
             yield session, bounded_request
-        except BaseException:
-            session.rollback()
-            raise
-        else:
             session.commit()
+        finally:
+            session.close()
 
     def _load_status(self, session, request):
         session, request = session
